@@ -69,7 +69,7 @@ export async function setConfigValue(args: unknown) {
 
     try {
       // Parse string values that should be arrays or objects
-      let valueToStore = parsed.data.value;
+      let valueToStore: any = parsed.data.value;
       
       // If the value is a string that looks like an array or object, try to parse it
       if (typeof valueToStore === 'string' && 
@@ -83,27 +83,34 @@ export async function setConfigValue(args: unknown) {
       }
 
       // Special handling for known array configuration keys
-      if ((parsed.data.key === 'allowedDirectories' || parsed.data.key === 'blockedCommands') && 
-          !Array.isArray(valueToStore)) {
-        if (typeof valueToStore === 'string') {
+      if (parsed.data.key === 'allowedDirectories' || parsed.data.key === 'blockedCommands') {
+        if (Array.isArray(valueToStore)) {
+          // Already an array, keep as is
+        } else if (typeof valueToStore === 'string') {
           try {
-            valueToStore = JSON.parse(valueToStore);
+            const parsedValue = JSON.parse(valueToStore);
+            if (Array.isArray(parsedValue)) {
+              valueToStore = parsedValue;
+            } else {
+              // If parsing succeeded but not an array, wrap in array
+              valueToStore = [String(parsedValue)];
+            }
           } catch (parseError) {
             console.error(`Failed to parse string as array for ${parsed.data.key}: ${parseError}`);
-            // If parsing failed and it's a single value, convert to an array with one item
+            // If parsing failed, check if it looks like a single value (no brackets)
             if (!valueToStore.includes('[')) {
+              valueToStore = [valueToStore];
+            } else {
+              // Fallback: convert to string array with single item
               valueToStore = [valueToStore];
             }
           }
-        } else {
-          // If not a string or array, convert to an array with one item
-          valueToStore = [valueToStore];
-        }
-        
-        // Ensure the value is an array after all our conversions
-        if (!Array.isArray(valueToStore)) {
-          console.error(`Value for ${parsed.data.key} is still not an array, converting to array`);
+        } else if (valueToStore !== null) {
+          // Convert non-string, non-null values to string array
           valueToStore = [String(valueToStore)];
+        } else {
+          // Handle null case
+          valueToStore = [];
         }
       }
 

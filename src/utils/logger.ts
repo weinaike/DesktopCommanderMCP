@@ -8,15 +8,43 @@ import type { FilteredStdioServerTransport } from '../custom-stdio.js';
 // Global reference to the MCP transport (set in index.ts)
 declare global {
   var mcpTransport: FilteredStdioServerTransport | undefined;
+  var currentLogLevel: LogLevel | undefined;
 }
 
 export type LogLevel = 'emergency' | 'alert' | 'critical' | 'error' | 'warning' | 'notice' | 'info' | 'debug';
+
+// Log level priorities (higher number = more severe)
+const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
+  'debug': 0,
+  'info': 1,
+  'notice': 2,
+  'warning': 3,
+  'error': 4,
+  'critical': 5,
+  'alert': 6,
+  'emergency': 7,
+};
+
+/**
+ * Check if a log message should be sent based on current log level
+ */
+function shouldLog(messageLevel: LogLevel, currentLevel: LogLevel): boolean {
+  return LOG_LEVEL_PRIORITY[messageLevel] >= LOG_LEVEL_PRIORITY[currentLevel];
+}
 
 /**
  * Log a message using the appropriate method based on MCP initialization state
  */
 export function log(level: LogLevel, message: string, data?: any): void {
   try {
+    // Get current log level from global variable (set by server)
+    const currentLogLevel: LogLevel = global.currentLogLevel || 'info';
+
+    // Check if this message should be logged based on current level
+    if (!shouldLog(level, currentLogLevel)) {
+      return; // Skip this message
+    }
+
     // Check if MCP transport is available
     if (global.mcpTransport) {
       // Always use MCP logging (will buffer if not initialized yet)

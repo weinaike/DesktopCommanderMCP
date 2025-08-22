@@ -5,8 +5,11 @@ import {
     ListResourcesRequestSchema,
     ListPromptsRequestSchema,
     InitializeRequestSchema,
+    SetLevelRequestSchema,
     type CallToolRequest,
     type InitializeRequest,
+    type SetLevelRequest,
+    type LoggingLevel,
 } from "@modelcontextprotocol/sdk/types.js";
 import {zodToJsonSchema} from "zod-to-json-schema";
 import { getSystemInfo, getOSSpecificGuidance, getPathGuidance, getDevelopmentToolGuidance } from './utils/system-info.js';
@@ -86,8 +89,33 @@ server.setRequestHandler(ListPromptsRequestSchema, async () => {
     };
 });
 
+// Add handler for logging/setLevel method
+server.setRequestHandler(SetLevelRequestSchema, async (request: SetLevelRequest) => {
+    try {
+        const level = request.params.level;
+        currentLogLevel = level;
+        
+        // Set global log level for logger module
+        global.currentLogLevel = level;
+        
+        logToStderr('info', `Logging level set to: ${level}`);
+        
+        // Return empty response (no specific result defined for this method)
+        return {};
+    } catch (error) {
+        logToStderr('error', `Error in logging/setLevel handler: ${error}`);
+        throw error;
+    }
+});
+
 // Store current client info (simple variable)
 let currentClient = { name: 'uninitialized', version: 'uninitialized' };
+
+// Store current logging level
+let currentLogLevel: LoggingLevel = 'info'; // Default logging level
+
+// Initialize global log level for logger module
+global.currentLogLevel = currentLogLevel;
 
 // Add handler for initialization method - capture client info
 server.setRequestHandler(InitializeRequestSchema, async (request: InitializeRequest) => {
@@ -124,13 +152,13 @@ server.setRequestHandler(InitializeRequestSchema, async (request: InitializeRequ
 });
 
 // Export current client info for access by other modules
-export { currentClient };
+export { currentClient, currentLogLevel };
 
 logToStderr('info', 'Setting up request handlers...');
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
     try {
-        logToStderr('debug', 'Generating tools list...');
+        logger.debug('Generating tools list...');
         return {
             tools: [
                 // Configuration tools

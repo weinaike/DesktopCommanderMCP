@@ -5,7 +5,15 @@ export const GetConfigArgsSchema = z.object({});
 
 export const SetConfigValueArgsSchema = z.object({
   key: z.string(),
-  value: z.any(),
+  value: z.union([
+    z.string(), 
+    z.number(), 
+    z.boolean(), 
+    z.null(),
+    z.array(z.string()),
+    z.array(z.number()),
+    z.array(z.boolean())
+  ]).describe("The value to set (can be string, number, boolean, null, or arrays of these types)"),
 });
 
 // Empty schemas
