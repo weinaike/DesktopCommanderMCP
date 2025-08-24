@@ -8,6 +8,43 @@ import { getSystemInfo } from '../utils/system-info.js';
 import * as os from 'os';
 import { configManager } from '../config-manager.js';
 
+// Maximum length for output truncation (in characters)
+const MAX_OUTPUT_LENGTH = 10000;
+
+/**
+ * Safely truncate text to avoid splitting multi-byte characters (like Chinese characters)
+ * @param text The text to truncate
+ * @param maxLength Maximum length in characters
+ * @returns Truncated text with '...' prefix if truncated
+ */
+function safeTruncateOutput(text: string, maxLength: number = MAX_OUTPUT_LENGTH): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+  
+  // Get the last maxLength characters
+  let truncated = text.slice(-maxLength);
+  
+  // Check if we might have split a multi-byte character at the beginning
+  // by looking for incomplete UTF-8 sequences
+  let startIndex = 0;
+  
+  // Skip any potential broken characters at the start
+  // Multi-byte UTF-8 characters start with bytes 0xC0-0xFD
+  // Continuation bytes start with 0x80-0xBF
+  for (let i = 0; i < Math.min(4, truncated.length); i++) {
+    const charCode = truncated.charCodeAt(i);
+    // If we find a normal ASCII character or a proper start of UTF-8 sequence, stop
+    if (charCode < 0x80 || (charCode >= 0xC0 && charCode <= 0xFD)) {
+      startIndex = i;
+      break;
+    }
+  }
+  
+  truncated = truncated.slice(startIndex);
+  return '...' + truncated;
+}
+
 /**
  * Start a new process (renamed from execute_command)
  * Includes early detection of process waiting for input
@@ -67,8 +104,10 @@ export async function startProcess(args: unknown): Promise<ServerResult> {
   );
 
   if (result.pid === -1) {
+    // Truncate error output safely to avoid splitting multi-byte characters
+    const truncatedErrorOutput = safeTruncateOutput(result.output);
     return {
-      content: [{ type: "text", text: result.output }],
+      content: [{ type: "text", text: truncatedErrorOutput }],
       isError: true,
     };
   }
@@ -85,10 +124,13 @@ export async function startProcess(args: unknown): Promise<ServerResult> {
     statusMessage = '\n⏳ Process is running. Use read_process_output to get more output.';
   }
 
+  // Truncate output safely to avoid splitting multi-byte characters
+  const truncatedOutput = safeTruncateOutput(result.output);
+
   return {
     content: [{
       type: "text",
-      text: `Process started with PID ${result.pid} (shell: ${shellUsed})\nInitial output:\n${result.output}${statusMessage}`
+      text: `Process started with PID ${result.pid} (shell: ${shellUsed})\nInitial output:\n${truncatedOutput}${statusMessage}`
     }],
   };
 }
@@ -267,7 +309,9 @@ export async function readProcessOutput(args: unknown): Promise<ServerResult> {
     statusMessage = '\n⏱️ Timeout reached - process may still be running';
   }
 
-  const responseText = output || 'No new output available';
+  // Truncate output safely to avoid splitting multi-byte characters
+  const rawOutput = output || 'No new output available';
+  const responseText = safeTruncateOutput(rawOutput);
   
   return {
     content: [{
@@ -460,7 +504,9 @@ export async function interactWithProcess(args: unknown): Promise<ServerResult> 
     let responseText = `✅ Input executed in process ${pid}`;
     
     if (cleanOutput && cleanOutput.trim().length > 0) {
-      responseText += `:\n\n📤 Output:\n${cleanOutput}`;
+      // Truncate clean output safely to avoid splitting multi-byte characters
+      const truncatedCleanOutput = safeTruncateOutput(cleanOutput);
+      responseText += `:\n\n📤 Output:\n${truncatedCleanOutput}`;
     } else {
       responseText += `.\n📭 (No output produced)`;
     }
