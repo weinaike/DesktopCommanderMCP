@@ -14,35 +14,69 @@ const MAX_OUTPUT_LENGTH = 10000;
 /**
  * Safely truncate text to avoid splitting multi-byte characters (like Chinese characters)
  * @param text The text to truncate
- * @param maxLength Maximum length in characters
- * @returns Truncated text with '...' prefix if truncated
+ * @param maxLength Maximum length in characters (based on Unicode code points)
+ * @returns Truncated text with '...' prefix/infix if truncated
  */
 function safeTruncateOutput(text: string, maxLength: number = MAX_OUTPUT_LENGTH): string {
-  if (text.length <= maxLength) {
+  // Handle edge cases
+  if (maxLength <= 0) return '';
+  if (!text) return text;
+  
+  // Convert to array of Unicode code points for accurate character counting
+  const chars = Array.from(text);
+  
+  // If text fits within limit, return as-is
+  if (chars.length <= maxLength) {
     return text;
   }
   
-  // Get the last maxLength characters
-  let truncated = text.slice(-maxLength);
-  
-  // Check if we might have split a multi-byte character at the beginning
-  // by looking for incomplete UTF-8 sequences
-  let startIndex = 0;
-  
-  // Skip any potential broken characters at the start
-  // Multi-byte UTF-8 characters start with bytes 0xC0-0xFD
-  // Continuation bytes start with 0x80-0xBF
-  for (let i = 0; i < Math.min(4, truncated.length); i++) {
-    const charCode = truncated.charCodeAt(i);
-    // If we find a normal ASCII character or a proper start of UTF-8 sequence, stop
-    if (charCode < 0x80 || (charCode >= 0xC0 && charCode <= 0xFD)) {
-      startIndex = i;
-      break;
+  // For very small maxLength, we need special handling
+  if (maxLength <= 3) {
+    if (maxLength === 1) {
+      // Only space for 1 character, take the last character
+      return chars.slice(-1).join('');
+    } else if (maxLength === 2) {
+      // Space for 2 characters, could be ".X" or "XX"
+      // Prefer showing actual content over ellipsis if possible
+      return chars.slice(-2).join('');
+    } else { // maxLength === 3
+      // Space for 3 characters, could be "..." or "..X" or "XXX"
+      // Prefer showing some content with minimal ellipsis
+      return '..' + chars.slice(-1).join('');
     }
   }
   
-  truncated = truncated.slice(startIndex);
-  return '...' + truncated;
+  // Smart truncation: preserve both start and end when beneficial
+  // Only use smart truncation if we have enough space for meaningful content
+  if (maxLength >= 20) {
+    const ellipsis = '...';
+    const ellipsisLength = 3;
+    
+    // Reserve 20% for start, rest for end (minus ellipsis)
+    const reserveStart = Math.floor((maxLength - ellipsisLength) * 0.2);
+    const reserveEnd = (maxLength - ellipsisLength) - reserveStart;
+    
+    if (reserveStart > 0 && reserveEnd > 0) {
+      const startPart = chars.slice(0, reserveStart).join('');
+      const endPart = chars.slice(-reserveEnd).join('');
+      return startPart + ellipsis + endPart;
+    }
+  }
+  
+  // Fallback: end-only truncation with ellipsis
+  const ellipsis = '...';
+  const ellipsisLength = 3;
+  const availableLength = maxLength - ellipsisLength;
+  
+  if (availableLength <= 0) {
+    // This case should have been handled above, but as a safety net:
+    // If no space for content + ellipsis, just return last characters
+    return chars.slice(-maxLength).join('');
+  }
+  
+  // Take the last availableLength characters and prepend ellipsis
+  const truncatedContent = chars.slice(-availableLength).join('');
+  return ellipsis + truncatedContent;
 }
 
 /**
