@@ -1,5 +1,5 @@
 import { z } from "zod";
-
+import { DEFAULT_COMMAND_TIMEOUT } from "../config.js";
 // Config tools schemas
 export const GetConfigArgsSchema = z.object({});
 
@@ -22,7 +22,7 @@ export const ListProcessesArgsSchema = z.object({});
 // Terminal tools schemas
 export const StartProcessArgsSchema = z.object({
   command: z.string(),
-  timeout_ms: z.number(),
+  timeout_ms: z.number().optional().default(DEFAULT_COMMAND_TIMEOUT),
   shell: z.string().optional(),
 });
 
